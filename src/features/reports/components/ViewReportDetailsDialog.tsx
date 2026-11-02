@@ -1,6 +1,6 @@
 import { DialogContent, DialogHeader } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Calendar, MapPin, User, FileText, MapPinCheck } from 'lucide-react';
+import { Calendar, MapPin, User, FileText, MapPinCheck, Home } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { ReportStatusBadge } from './ReportStatusBadge';
 import type { Report } from '../types/report.types';
@@ -80,6 +80,14 @@ export function ViewReportDetailsDialog({ report, fetchReports }: { report: Repo
           {report.address && <div className="flex items-start gap-3">
             <MapPinCheck size={35} className='text-gray-500 mt-0.5' />
             {report.address && <p className='flex'> Endereço: {report.address}</p>}
+          </div>}
+
+          {report.houseNumber && <div className="flex items-start gap-3">
+            <Home className="w-4 h-4 text-gray-500 mt-0.5" />
+            <div>
+              <p className="font-medium text-gray-900">Número da casa</p>
+              <p className="text-gray-600">{report.houseNumber}</p>
+            </div>
           </div>}
 
           <div className="flex items-start gap-3">

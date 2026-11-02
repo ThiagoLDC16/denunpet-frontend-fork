@@ -17,6 +17,7 @@ export interface Report {
     midia: Midia[]
     location: string
     address: string | null
+    houseNumber: string | null
     status: ReportStatus
     statusComment: string;
     userId: number

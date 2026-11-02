@@ -19,6 +19,8 @@ type reportSchemaProps = {
     ocurrenceDate: string
     location: string,
     midia: FileList
+    isHouse: boolean,
+    houseNumber: string,
     user?: User
 }
 
@@ -26,15 +28,18 @@ export function EditReportDialog({ report, setIsOpen, fetchReports }: { report: 
 
 
 
-    const { register, control, handleSubmit, setValue } = useForm<reportSchemaProps>({
+    const { register, control, handleSubmit, setValue, watch } = useForm<reportSchemaProps>({
         defaultValues: {
             description: report.description,
             details: report.details,
             ocurrenceDate: new Date(report.ocurrenceDate).toISOString().split("T")[0],
             location: report.location,
+            isHouse: !!report.houseNumber,
+            houseNumber: report.houseNumber ?? '',
 
         }
     })
+    const isHouse = watch("isHouse")
     const [loading, setLoading] = useState(false)
     const [display, setDisplay] = useState(false);
     const [, setHasImage] = useState(true);
@@ -48,6 +53,7 @@ export function EditReportDialog({ report, setIsOpen, fetchReports }: { report: 
         formData.append("ocurrenceDate", new Date(data.ocurrenceDate).toISOString())
         formData.append("location", report.location);
         formData.append("address", report.address ?? '');
+        if (data.isHouse && data.houseNumber) formData.append("houseNumber", data.houseNumber);
 
         if (data.midia) {
             for (let i = 0; i < data.midia.length; i++) {
@@ -130,6 +136,15 @@ export function EditReportDialog({ report, setIsOpen, fetchReports }: { report: 
                     </MapContainer>)}
                     {report.address && <p>Endereço: {report.address}</p>}
                 </div>
+
+                <label htmlFor="isHouse" className='pt-4 flex items-center gap-2'>
+                    <input type='checkbox' id="isHouse" {...register("isHouse")} /> O local é uma casa?
+                </label>
+
+                {isHouse && <div className="pt-4 grid grid-cols-4">
+                    <Label htmlFor="houseNumber">Número da casa</Label>
+                    <Input className="col-span-3" id="houseNumber" {...register('houseNumber')} placeholder='Ex.: 123' />
+                </div>}
 
                 <div className="pt-4 grid grid-cols-4">
                     <Label htmlFor="midia">Fotos/vídeos</Label>

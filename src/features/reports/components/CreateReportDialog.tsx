@@ -18,11 +18,14 @@ type reportSchemaProps = {
     location: string,
     midia: FileList,
     anonymous: string,
+    isHouse: boolean,
+    houseNumber: string,
     user?: User
 }
 
 export function CreateReportDialog({ setIsOpen, fetchReports }: { setIsOpen: React.Dispatch<React.SetStateAction<boolean>>, fetchReports: () => Promise<void> }) {
-    const { register, handleSubmit, setValue } = useForm<reportSchemaProps>()
+    const { register, handleSubmit, setValue, watch } = useForm<reportSchemaProps>()
+    const isHouse = watch("isHouse")
     const [loading, setLoading] = useState(false)
     const [, setDisplay] = useState(false);
     const [hasImage, setHasImage] = useState(false);
@@ -65,6 +68,7 @@ export function CreateReportDialog({ setIsOpen, fetchReports }: { setIsOpen: Rea
         if (coords) {
             formData.append("location", coords.join(', '));
             formData.append("address", address);
+            if (data.isHouse && data.houseNumber) formData.append("houseNumber", data.houseNumber);
             setHasLoc(true);
         } else {
             setHasLoc(false);
@@ -134,6 +138,15 @@ export function CreateReportDialog({ setIsOpen, fetchReports }: { setIsOpen: Rea
                 </div>
 
                 {!hasLoc && <p className='text-right text-l mt-1 text-red-600'>Localização é obrigatória</p>}
+
+                <label htmlFor="isHouse" className='pt-4 flex items-center gap-2'>
+                    <input type='checkbox' id="isHouse" {...register("isHouse")} /> O local é uma casa?
+                </label>
+
+                {isHouse && <div className="pt-4 grid grid-cols-4">
+                    <Label htmlFor="houseNumber">Número da casa</Label>
+                    <Input className="col-span-3" id="houseNumber" {...register('houseNumber')} placeholder='Ex.: 123' />
+                </div>}
 
                 <div className="pt-4 grid grid-cols-4">
                     <Label htmlFor="midia">Fotos/vídeos</Label>
