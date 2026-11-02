@@ -17,7 +17,6 @@ type reportSchemaProps = {
     details: string,
     ocurrenceDate: Date
     location: string,
-    midia: FileList,
     anonymous: string,
     isHouse: boolean,
     houseNumber: string,
@@ -35,21 +34,29 @@ function LocationPicker({ setCoords }: { setCoords: React.Dispatch<React.SetStat
 }
 
 export function CreateReportDialog({ setIsOpen, fetchReports }: { setIsOpen: React.Dispatch<React.SetStateAction<boolean>>, fetchReports: () => Promise<void> }) {
-    const { register, handleSubmit, setValue, watch } = useForm<reportSchemaProps>()
+    const { register, handleSubmit, watch } = useForm<reportSchemaProps>()
     const isHouse = watch("isHouse")
     const [loading, setLoading] = useState(false)
     const [, setDisplay] = useState(false);
-    const [hasImage, setHasImage] = useState(false);
-    const [hasVideo, setHasVideo] = useState(false);
-    const [hasLoc, setHasLoc] = useState(true);
+    // Os avisos de itens obrigatórios só aparecem depois da primeira tentativa de envio
+    const [submitted, setSubmitted] = useState(false);
     const [coords, setCoords] = useState<null | number[]>(null);
     const [address, setAddress] = useState('');
-    const [previews, setPreviews] = useState<{ url: string, type: 'image' | 'video' }[]>([]);
+    // Arquivos acumulados entre seleções (o input de arquivo substitui a seleção anterior a cada abertura)
+    const [files, setFiles] = useState<File[]>([]);
+    const [previews, setPreviews] = useState<{ url: string, type: 'image' | 'video', file: File }[]>([]);
     const { user } = useAuth()
 
+    const hasImage = files.some(file => file.type === 'image/jpeg' || file.type === 'image/png');
+    const hasVideo = files.some(file => file.type === 'video/mp4');
+
     useEffect(() => {
-        return () => previews.forEach(preview => URL.revokeObjectURL(preview.url));
-    }, [previews])
+        const next = files
+            .filter(file => file.type.startsWith('image/') || file.type.startsWith('video/'))
+            .map(file => ({ url: URL.createObjectURL(file), type: file.type.startsWith('image/') ? 'image' as const : 'video' as const, file }));
+        setPreviews(next);
+        return () => next.forEach(preview => URL.revokeObjectURL(preview.url));
+    }, [files])
 
     useEffect(() => {
         function getLocation() {
@@ -79,6 +86,7 @@ export function CreateReportDialog({ setIsOpen, fetchReports }: { setIsOpen: Rea
     }, [coords])
 
     async function handleCreateReport(data: reportSchemaProps) {
+        setSubmitted(true)
         const formData = new FormData()
         formData.append("description", data.description)
         formData.append("details", data.details)
@@ -89,20 +97,9 @@ export function CreateReportDialog({ setIsOpen, fetchReports }: { setIsOpen: Rea
             formData.append("location", coords.join(', '));
             formData.append("address", address);
             if (data.isHouse && data.houseNumber) formData.append("houseNumber", data.houseNumber);
-            setHasLoc(true);
-        } else {
-            setHasLoc(false);
         }
 
-        if (data.midia) {
-            for (let i = 0; i < data.midia.length; i++) {
-                const file = data.midia[i];
-                formData.append("midia", file)
-            }
-        } else {
-            setHasImage(false);
-            setHasVideo(false);
-        }
+        files.forEach(file => formData.append("midia", file))
 
         if (user) formData.append("user", JSON.stringify(user))
 
@@ -164,7 +161,7 @@ export function CreateReportDialog({ setIsOpen, fetchReports }: { setIsOpen: Rea
                     {address && <p>Endereço: {address}</p>}
                 </div>
 
-                {!hasLoc && <p className='text-right text-l mt-1 text-red-600'>Localização é obrigatória</p>}
+                {submitted && !coords && <p className='text-right text-l mt-1 text-red-600'>Localização é obrigatória</p>}
 
                 <label htmlFor="isHouse" className='pt-4 flex items-center gap-2'>
                     <input type='checkbox' id="isHouse" {...register("isHouse")} /> O local é uma casa?
@@ -178,38 +175,34 @@ export function CreateReportDialog({ setIsOpen, fetchReports }: { setIsOpen: Rea
                 <div className="pt-4 grid grid-cols-4">
                     <Label htmlFor="midia">Fotos/vídeos</Label>
                     <Input className="col-span-3" id="midia" multiple type="file" onChange={(e) => {
-                        setValue("midia", e.target.files as FileList, { shouldValidate: false })
-                        setPreviews(Array.from(e.target.files ?? [])
-                            .filter(file => file.type.startsWith('image/') || file.type.startsWith('video/'))
-                            .map(file => ({ url: URL.createObjectURL(file), type: file.type.startsWith('image/') ? 'image' : 'video' })));
-                        if (e.target.files) {
-                            setHasImage(false);
-                            setHasVideo(false);
-                            for (let i = 0; i < e.target.files.length; i++) {
-                                const file = e.target.files[i];
-                                if (file.type === 'video/mp4') {
-                                    setHasVideo(true);
-                                }
-                                if (file.type === 'image/jpeg' || file.type === 'image/png') {
-                                    setHasImage(true);
-                                }
-                            }
-                        } else {
-                            setHasImage(false);
-                            setHasVideo(false);
-                        }
+                        const selected = Array.from(e.target.files ?? []);
+                        setFiles(prev => [...prev, ...selected]);
+                        // Limpa o input para permitir abrir de novo (inclusive escolhendo o mesmo arquivo)
+                        e.target.value = '';
                     }} />
                 </div>
 
+                {files.length > 0 && <p className='text-xs text-gray-500 mt-1 text-right'>
+                    {files.length} {files.length > 1 ? 'arquivos selecionados' : 'arquivo selecionado'}
+                </p>}
+
                 {previews.length > 0 && <div className='pt-4 flex gap-2 flex-wrap'>
-                    {previews.map(preview => preview.type === 'image' ?
-                        <img key={preview.url} src={preview.url} className='h-24 object-cover rounded' /> :
-                        <video controls={true} key={preview.url} src={preview.url} className='h-24 object-cover rounded'></video>
-                    )}
+                    {previews.map(preview => <div key={preview.url} className='relative'>
+                        {preview.type === 'image' ?
+                            <img src={preview.url} className='h-24 object-cover rounded' /> :
+                            <video controls={true} src={preview.url} className='h-24 object-cover rounded'></video>}
+                        <button
+                            type="button"
+                            aria-label="Remover arquivo"
+                            className='absolute top-1 right-1 bg-black/60 text-white rounded-full w-5 h-5 text-xs leading-5'
+                            onClick={() => setFiles(prev => prev.filter(file => file !== preview.file))}
+                        >×</button>
+                    </div>)}
                 </div>}
 
-                {!hasImage && <p className='text-right text-l mt-1 text-red-600'>Precisa de pelo menos uma foto</p>}
-                {!hasVideo && <p className='text-right text-l mt-1 text-red-600'>Precisa de pelo menos um vídeo</p>}
+                {submitted && !hasImage && <p className='text-right text-l mt-1 text-red-600'>Precisa de pelo menos uma foto (.jpg ou .png)</p>}
+                {submitted && !hasVideo && <p className='text-right text-l mt-1 text-red-600'>Precisa de pelo menos um vídeo (.mp4)</p>}
+                {submitted && (!hasImage || !hasVideo || !coords) && <p className='text-right text-sm mt-2 text-red-600 font-medium'>Não foi possível enviar: corrija os itens acima.</p>}
                 {loading && <p className='text-right text-xl my-3 text-blue-500'>Carregando...</p>}
 
                 <label htmlFor="anonymous" className='flex items-center gap-2 justify-end'>

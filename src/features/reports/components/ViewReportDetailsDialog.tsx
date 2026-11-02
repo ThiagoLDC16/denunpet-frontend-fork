@@ -1,9 +1,9 @@
 import { DialogContent, DialogHeader } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Calendar, MapPin, User, FileText, MapPinCheck, Home } from 'lucide-react';
+import { Calendar, MapPin, User, FileText, MapPinCheck, Home, Image as ImageIcon } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { ReportStatusBadge } from './ReportStatusBadge';
-import type { Report } from '../types/report.types';
+import { ReportStatus, type Report } from '../types/report.types';
 import { MapContainer, Marker, TileLayer } from 'react-leaflet';
 import { useState } from 'react';
 import { api } from '@/lib/api';
@@ -14,8 +14,40 @@ export function ViewReportDetailsDialog({ report, fetchReports }: { report: Repo
   const [statusComment, setStatusComment] = useState('');
   const [statusCommentError, setStatusCommentError] = useState(false);
   const [display] = useState(false);
+  const [triageImages, setTriageImages] = useState<FileList | null>(null);
+  const [triageImagesError, setTriageImagesError] = useState(false);
+  const [uploadingTriageImages, setUploadingTriageImages] = useState(false);
   const { user } = useAuth();
   if (!report) return null;
+
+  const canAddTriageImages = user?.type === UserType.ONG
+    && report.ngoId === user.id
+    && (report.status === ReportStatus.UNDER_REVIEW || report.status === ReportStatus.IN_PROGRESS);
+
+  const reportMidia = report.midia?.filter(item => !item.addedByNgo) ?? [];
+  const ngoMidia = report.midia?.filter(item => item.addedByNgo) ?? [];
+
+  const handleAddTriageImages = async () => {
+    if (!triageImages || triageImages.length === 0) {
+      setTriageImagesError(true);
+      return;
+    }
+    setUploadingTriageImages(true);
+    try {
+      const formData = new FormData();
+      Array.from(triageImages).forEach(file => formData.append('midia', file));
+      await api.post(`/api/report/${report.id}/midia`, formData)
+      setTriageImages(null);
+      setTriageImagesError(false);
+      if (fetchReports) {
+        await fetchReports()
+      }
+    } catch (error) {
+      console.error(error)
+    } finally {
+      setUploadingTriageImages(false);
+    }
+  }
 
   const handleProgress = async (type: 'progress' | 'resolved' | 'unresolved') => {
     if (!statusComment) {
@@ -123,7 +155,7 @@ export function ViewReportDetailsDialog({ report, fetchReports }: { report: Repo
         <div>
           {!display && <h3 className='text-sm'>Mídias da denúncia</h3>}
           <div className='flex gap-2 flex-wrap'>
-            {!display && report?.midia && report?.midia.map(item => item.type === "image" ?
+            {!display && reportMidia.map(item => item.type === "image" ?
 
 
               <img key={item.id} src={`${import.meta.env.VITE_API_URL}${item.url}`} className='h-40 object-cover rounded col-span-1' /> :
@@ -133,6 +165,37 @@ export function ViewReportDetailsDialog({ report, fetchReports }: { report: Repo
           </div>
 
         </div>
+
+        {/* Imagens adicionadas pela ONG durante a triagem */}
+        {(ngoMidia.length > 0 || canAddTriageImages) && <div className="space-y-2">
+          <h4 className="font-medium text-gray-900 flex items-center gap-2">
+            <ImageIcon className="w-4 h-4" />
+            Imagens da triagem
+          </h4>
+          {ngoMidia.length > 0
+            ? <div className='flex gap-2 flex-wrap'>
+              {ngoMidia.map(item => <img key={item.id} src={`${import.meta.env.VITE_API_URL}${item.url}`} className='h-40 object-cover rounded col-span-1' />)}
+            </div>
+            : <p className="text-sm text-gray-500">Nenhuma imagem adicionada pela ONG ainda.</p>}
+
+          {canAddTriageImages && <div className="space-y-1">
+            <div className="flex gap-2 items-center">
+              <input
+                key={triageImages ? 'selected' : 'empty'}
+                type="file"
+                accept="image/*"
+                multiple
+                name="triageImages"
+                className="border-2 grow rounded-sm py-1 text-sm"
+                onChange={(e) => setTriageImages(e.target.files)}
+              />
+              <Button variant={'secondary'} onClick={handleAddTriageImages} disabled={uploadingTriageImages}>
+                {uploadingTriageImages ? 'Enviando...' : 'Adicionar imagens'}
+              </Button>
+            </div>
+            {triageImagesError && <p className="text-red-600 text-xs text-right">Selecione ao menos uma imagem</p>}
+          </div>}
+        </div>}
 
         {/* Andamento da denúncia */}
         {report.statusComment && <div className="space-y-2">

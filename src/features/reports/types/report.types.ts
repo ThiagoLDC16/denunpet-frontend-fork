@@ -3,6 +3,7 @@ export interface Midia {
     type: string
     extension: string
     url: string
+    addedByNgo: boolean
     reportId: number
 }
 
@@ -21,6 +22,7 @@ export interface Report {
     status: ReportStatus
     statusComment: string;
     userId: number
+    ngoId: number | null
     rejectReason: string;
     user: {
       id: number;
