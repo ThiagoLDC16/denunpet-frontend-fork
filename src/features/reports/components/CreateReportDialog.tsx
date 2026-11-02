@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from '@/features/auth/contexts/AuthContext';
 import type { User } from '@/features/auth/types';
 
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from 'react-leaflet'
+import type { LeafletEvent } from 'leaflet';
 
 type reportSchemaProps = {
     description: string,
@@ -21,6 +22,16 @@ type reportSchemaProps = {
     isHouse: boolean,
     houseNumber: string,
     user?: User
+}
+
+function LocationPicker({ setCoords }: { setCoords: React.Dispatch<React.SetStateAction<null | number[]>> }) {
+    useMapEvents({
+        click(e) {
+            setCoords([e.latlng.lat, e.latlng.lng]);
+        }
+    })
+
+    return null
 }
 
 export function CreateReportDialog({ setIsOpen, fetchReports }: { setIsOpen: React.Dispatch<React.SetStateAction<boolean>>, fetchReports: () => Promise<void> }) {
@@ -47,15 +58,19 @@ export function CreateReportDialog({ setIsOpen, fetchReports }: { setIsOpen: Rea
     }, [])
 
     useEffect(() => {
+        let ignore = false;
+
         async function getAddress() {
             if (coords) {
                 const address = await api.get(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${coords[0]}&lon=${coords[1]}&layer=address`);
-                setAddress(address.data.display_name);
+                if (!ignore) setAddress(address.data.display_name);
                 console.log(address.data)
             }
         }
 
         getAddress();
+
+        return () => { ignore = true; }
     }, [coords])
 
     async function handleCreateReport(data: reportSchemaProps) {
@@ -128,12 +143,19 @@ export function CreateReportDialog({ setIsOpen, fetchReports }: { setIsOpen: Rea
                             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                         />
-                        <Marker position={[coords[0], coords[1]]}>
+                        <Marker position={[coords[0], coords[1]]} draggable={true} eventHandlers={{
+                            dragend(e: LeafletEvent) {
+                                const { lat, lng } = e.target.getLatLng();
+                                setCoords([lat, lng]);
+                            }
+                        }}>
                             <Popup>
                                 A pretty CSS3 popup. <br /> Easily customizable.
                             </Popup>
                         </Marker>
+                        <LocationPicker setCoords={setCoords} />
                     </MapContainer>)}
+                    {coords && <p className='text-xs text-gray-500 mt-1'>Clique no mapa ou arraste o marcador para alterar a localização</p>}
                     {address && <p>Endereço: {address}</p>}
                 </div>
 
