@@ -44,7 +44,12 @@ export function CreateReportDialog({ setIsOpen, fetchReports }: { setIsOpen: Rea
     const [hasLoc, setHasLoc] = useState(true);
     const [coords, setCoords] = useState<null | number[]>(null);
     const [address, setAddress] = useState('');
+    const [previews, setPreviews] = useState<{ url: string, type: 'image' | 'video' }[]>([]);
     const { user } = useAuth()
+
+    useEffect(() => {
+        return () => previews.forEach(preview => URL.revokeObjectURL(preview.url));
+    }, [previews])
 
     useEffect(() => {
         function getLocation() {
@@ -174,6 +179,9 @@ export function CreateReportDialog({ setIsOpen, fetchReports }: { setIsOpen: Rea
                     <Label htmlFor="midia">Fotos/vídeos</Label>
                     <Input className="col-span-3" id="midia" multiple type="file" onChange={(e) => {
                         setValue("midia", e.target.files as FileList, { shouldValidate: false })
+                        setPreviews(Array.from(e.target.files ?? [])
+                            .filter(file => file.type.startsWith('image/') || file.type.startsWith('video/'))
+                            .map(file => ({ url: URL.createObjectURL(file), type: file.type.startsWith('image/') ? 'image' : 'video' })));
                         if (e.target.files) {
                             setHasImage(false);
                             setHasVideo(false);
@@ -192,6 +200,13 @@ export function CreateReportDialog({ setIsOpen, fetchReports }: { setIsOpen: Rea
                         }
                     }} />
                 </div>
+
+                {previews.length > 0 && <div className='pt-4 flex gap-2 flex-wrap'>
+                    {previews.map(preview => preview.type === 'image' ?
+                        <img key={preview.url} src={preview.url} className='h-24 object-cover rounded' /> :
+                        <video controls={true} key={preview.url} src={preview.url} className='h-24 object-cover rounded'></video>
+                    )}
+                </div>}
 
                 {!hasImage && <p className='text-right text-l mt-1 text-red-600'>Precisa de pelo menos uma foto</p>}
                 {!hasVideo && <p className='text-right text-l mt-1 text-red-600'>Precisa de pelo menos um vídeo</p>}
