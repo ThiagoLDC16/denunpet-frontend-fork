@@ -1,5 +1,5 @@
 import { Controller, useForm } from 'react-hook-form';
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api } from '@/lib/api';
 
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,6 @@ type reportSchemaProps = {
     details: string,
     ocurrenceDate: string
     location: string,
-    midia: FileList
     isHouse: boolean,
     houseNumber: string,
     user?: User
@@ -28,7 +27,7 @@ export function EditReportDialog({ report, setIsOpen, fetchReports }: { report: 
 
 
 
-    const { register, control, handleSubmit, setValue, watch } = useForm<reportSchemaProps>({
+    const { register, control, handleSubmit, watch } = useForm<reportSchemaProps>({
         defaultValues: {
             description: report.description,
             details: report.details,
@@ -42,8 +41,21 @@ export function EditReportDialog({ report, setIsOpen, fetchReports }: { report: 
     const isHouse = watch("isHouse")
     const [loading, setLoading] = useState(false)
     const [display, setDisplay] = useState(false);
-    const [, setHasImage] = useState(true);
+    // Mídias existentes marcadas para remoção e arquivos novos acumulados entre seleções
+    const [removedMidiaIds, setRemovedMidiaIds] = useState<number[]>([]);
+    const [files, setFiles] = useState<File[]>([]);
+    const [previews, setPreviews] = useState<{ url: string, type: 'image' | 'video', file: File }[]>([]);
     const { user } = useAuth()
+
+    const currentMidia = report.midia?.filter(item => !item.addedByNgo && !removedMidiaIds.includes(item.id)) ?? [];
+
+    useEffect(() => {
+        const next = files
+            .filter(file => file.type.startsWith('image/') || file.type.startsWith('video/'))
+            .map(file => ({ url: URL.createObjectURL(file), type: file.type.startsWith('image/') ? 'image' as const : 'video' as const, file }));
+        setPreviews(next);
+        return () => next.forEach(preview => URL.revokeObjectURL(preview.url));
+    }, [files])
 
 
     async function handleEditReport(data: reportSchemaProps) {
@@ -55,14 +67,8 @@ export function EditReportDialog({ report, setIsOpen, fetchReports }: { report: 
         formData.append("address", report.address ?? '');
         if (data.isHouse && data.houseNumber) formData.append("houseNumber", data.houseNumber);
 
-        if (data.midia) {
-            for (let i = 0; i < data.midia.length; i++) {
-                formData.append("midia", data.midia[i])
-            }
-            setHasImage(true);
-        } else {
-            setHasImage(false);
-        }
+        files.forEach(file => formData.append("midia", file))
+        if (removedMidiaIds.length) formData.append("removedMidia", JSON.stringify(removedMidiaIds))
 
 
         if (user) formData.append("user", JSON.stringify(user))
@@ -148,21 +154,50 @@ export function EditReportDialog({ report, setIsOpen, fetchReports }: { report: 
 
                 <div className="pt-4 grid grid-cols-4">
                     <Label htmlFor="midia">Fotos/vídeos</Label>
-                    <Input className="col-span-3" id="midia" multiple type="file" onChange={(e) => setValue("midia", e.target.files as FileList, { shouldValidate: false, })} />
+                    <Input className="col-span-3" id="midia" multiple type="file" onChange={(e) => {
+                        const selected = Array.from(e.target.files ?? []);
+                        setFiles(prev => [...prev, ...selected]);
+                        // Limpa o input para permitir abrir de novo (inclusive escolhendo o mesmo arquivo)
+                        e.target.value = '';
+                    }} />
                 </div>
 
-                <div>
+                {previews.length > 0 && <div className='pt-4'>
+                    <h3 className='text-sm'>Novas mídias</h3>
+                    <div className='flex gap-2 flex-wrap'>
+                        {previews.map(preview => <div key={preview.url} className='relative'>
+                            {preview.type === 'image' ?
+                                <img src={preview.url} className='h-24 object-cover rounded' /> :
+                                <video controls={true} src={preview.url} className='h-24 object-cover rounded'></video>}
+                            <button
+                                type="button"
+                                aria-label="Remover arquivo novo"
+                                className='absolute top-1 right-1 bg-black/60 text-white rounded-full w-5 h-5 text-xs leading-5'
+                                onClick={() => setFiles(prev => prev.filter(file => file !== preview.file))}
+                            >×</button>
+                        </div>)}
+                    </div>
+                </div>}
+
+                <div className='pt-4'>
                     {!display && <h3 className='text-sm'>Mídias da denúncia</h3>}
                     <div className='flex gap-2 flex-wrap'>
-                        {!display && report?.midia && report?.midia.map(item => item.type === "image" ?
-
-
-                            <img key={item.id} src={`${import.meta.env.VITE_API_URL}${item.url}`} className='h-40 object-cover rounded col-span-1' /> :
-                            <video controls={true} key={item.id} src={`${import.meta.env.VITE_API_URL}${item.url}`} className='h-30 object-cover rounded col-span-1' ></video>
-
-                        )}
+                        {!display && currentMidia.map(item => <div key={item.id} className='relative'>
+                            {item.type === "image" ?
+                                <img src={`${import.meta.env.VITE_API_URL}${item.url}`} className='h-40 object-cover rounded col-span-1' /> :
+                                <video controls={true} src={`${import.meta.env.VITE_API_URL}${item.url}`} className='h-30 object-cover rounded col-span-1' ></video>}
+                            <button
+                                type="button"
+                                aria-label="Remover mídia"
+                                className='absolute top-1 right-1 bg-black/60 text-white rounded-full w-5 h-5 text-xs leading-5'
+                                onClick={() => setRemovedMidiaIds(prev => [...prev, item.id])}
+                            >×</button>
+                        </div>)}
                     </div>
-
+                    {removedMidiaIds.length > 0 && <p className='text-xs text-gray-500 mt-1'>
+                        {removedMidiaIds.length} {removedMidiaIds.length > 1 ? 'mídias serão removidas' : 'mídia será removida'} ao enviar.{' '}
+                        <button type="button" className='underline' onClick={() => setRemovedMidiaIds([])}>Desfazer</button>
+                    </p>}
                 </div>
 
                 {loading && <p className='text-right text-xl my-3 text-blue-500'>Carregando...</p>}
