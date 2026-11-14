@@ -1,11 +1,12 @@
 import { ReportCard } from '../components/ReportCard';
 import { usePendingReports } from '../hooks/usePendingReports';
+import { useState } from 'react';
 
 export function PendingReportsPage() {
-  const { reports, loading, error, refetch } = usePendingReports()
+  const { reports: allReports, loading, error, refetch } = usePendingReports()
+  const [filterValue, setFilterValue] = useState('');
 
-
-  if (loading) {
+  if (loading && !allReports) {
     return (
       <div className="flex justify-center items-center min-h-96">
         <div className="text-lg">Carregando denúncias...</div>
@@ -21,19 +22,22 @@ export function PendingReportsPage() {
     );
   }
 
+  const search = filterValue.trim().toLowerCase()
+  const reports = allReports?.filter((report) => report.description.toLowerCase().includes(search))
 
   return (
     <div className="page-content">
       <h1>Denúncias Pendentes</h1>
 
       {/* Search + actions */}
-      <form className='flex items-center justify-start gap-2'>
+      <form className='flex items-center justify-start gap-2' onSubmit={e => e.preventDefault()}>
         <input
           type="text"
           className="input flex-1"
           placeholder="Pesquisar"
           aria-label="Pesquisar denúncias"
-
+          value={filterValue}
+          onChange={e => setFilterValue(e.target.value)}
         />
       </form>
 

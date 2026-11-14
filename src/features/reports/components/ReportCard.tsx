@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { ReportStatus, type Report } from "../types/report.types"
 import { EditReportDialogButton } from "./EditReportDialogButton";
 import { DeleteButton } from "./DeleteButton";
@@ -7,45 +6,27 @@ import { UserType } from "@/features/auth/types";
 import { SendReportToReviewDialogButton } from "./SendReportToReviewDialogButton";
 import { ViewReportButton } from "./ViewReportButton";
 
+// Texto e etapa (0 a 3) da barra de progresso para cada status
+const STATUS_INFO: Record<ReportStatus, { message: string, step: number }> = {
+    [ReportStatus.PENDING]: { message: "Pendente", step: 0 },
+    [ReportStatus.REJECTED]: { message: "Rejeitado", step: 0 },
+    [ReportStatus.UNDER_REVIEW]: { message: "Em Triagem", step: 1 },
+    [ReportStatus.IN_PROGRESS]: { message: "Em progresso", step: 2 },
+    [ReportStatus.RESOLVED]: { message: "Resolvido", step: 3 },
+    [ReportStatus.UNRESOLVED]: { message: "Não resolvido", step: 3 },
+}
 
 export const ReportCard = ({ report, fetchReports }: { report: Report, fetchReports?: () => Promise<void> }) => {
     const { user } = useAuth();
 
-    const [count, setCount] = useState<number>(0)
-    const [statusMessage, setStatusMessage] = useState<string>("")
-    useEffect(() => {
-        const statusMessage = () => {
-            switch (report.status) {
-                case ReportStatus.PENDING:
-                    setStatusMessage("Pendente");
-                    break
-                case ReportStatus.UNDER_REVIEW:
-                    setCount(1)
-                    setStatusMessage("Em Triagem");
-                    break
-                case ReportStatus.REJECTED:
-                    setStatusMessage("Rejeitado");
-                    break
-                case ReportStatus.IN_PROGRESS:
-                    setCount(2)
-                    setStatusMessage("Em progresso");
-                    break
-                case ReportStatus.RESOLVED:
-                    setCount(3)
-                    setStatusMessage("Resolvido");
-                    break
-                case ReportStatus.UNRESOLVED:
-                    setCount(3)
-                    setStatusMessage("Não resolvido")
-                    break
-                default:
-                    setStatusMessage("Desconhecido");
-            }
-        }
-        statusMessage()
-    })
+    const { message: statusMessage, step: count } = STATUS_INFO[report.status] ?? { message: "Desconhecido", step: 0 };
 
-
+    // Mesmas regras do backend: só o denunciante edita e exclui, e só enquanto
+    // a denúncia está pendente ou rejeitada (antes de uma ONG assumir)
+    const isOwner = user?.type === UserType.USER && report.userId === user.id;
+    const canEdit = isOwner && (report.status === ReportStatus.PENDING || report.status === ReportStatus.REJECTED);
+    const canDelete = canEdit;
+    const canReview = user?.type === UserType.ONG && report.status === ReportStatus.PENDING;
 
     return (<div className="report-card">
         <div className="report-card-header">
@@ -57,18 +38,9 @@ export const ReportCard = ({ report, fetchReports }: { report: Report, fetchRepo
 
             <div className="report-card-actions">
                 <ViewReportButton report={report} fetchReports={fetchReports} />
-                {count < 1 && <>
-                    {
-                        user?.type == UserType.USER
-                            ? <>
-                                <EditReportDialogButton report={report} fetchReports={fetchReports} />
-                                <DeleteButton id={report.id} fetchReports={fetchReports} />
-                            </>
-                            : <>
-                                {report.status === ReportStatus.PENDING && <SendReportToReviewDialogButton id={report.id} fetchReports={fetchReports} />}
-                            </>
-                    }</>
-                }
+                {canEdit && <EditReportDialogButton report={report} fetchReports={fetchReports} />}
+                {canDelete && <DeleteButton id={report.id} fetchReports={fetchReports} />}
+                {canReview && <SendReportToReviewDialogButton id={report.id} fetchReports={fetchReports} />}
             </div>
         </div>
 

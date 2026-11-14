@@ -5,7 +5,10 @@ export interface User {
     type: UserType
 }
 
-export enum UserType {
-    USER = 'USER',
-    ONG = 'ONG',
-}
+// Objeto const em vez de enum: o tsconfig usa erasableSyntaxOnly, que não permite enum
+export const UserType = {
+    USER: 'USER',
+    ONG: 'ONG',
+} as const;
+
+export type UserType = typeof UserType[keyof typeof UserType];

@@ -10,6 +10,7 @@ import {
     DialogTrigger,
 } from "@/components/ui/dialog"
 import { api } from "@/lib/api"
+import { getApiErrorMessage } from "@/lib/apiError"
 import { Trash } from "lucide-react"
 import { useState } from "react"
 
@@ -17,10 +18,12 @@ import { useState } from "react"
 
 export const DeleteButton = ({ id, fetchReports }: { id: number, fetchReports?: () => Promise<void> }) => {
     const [open, setOpen] = useState(false)
+    const [error, setError] = useState('')
 
 
     const handleSubmit = async () => {
 
+        setError('')
         try {
             await api.delete(`/api/report/${id}`)
             setOpen(false)
@@ -29,6 +32,7 @@ export const DeleteButton = ({ id, fetchReports }: { id: number, fetchReports?: 
             }
         } catch (error) {
             console.error(error)
+            setError(getApiErrorMessage(error, 'Não foi possível excluir a denúncia.'))
         }
     }
 
@@ -46,6 +50,8 @@ export const DeleteButton = ({ id, fetchReports }: { id: number, fetchReports?: 
                     Tem certeza que deseja excluir a <span className="font-bold">Denúncia {id}</span>?
                 </DialogDescription>
             </DialogHeader>
+
+            {error && <p className="text-red-600 text-sm text-right">{error}</p>}
 
             <DialogFooter className="flex flex-row items-center justify-center">
                 <DialogClose asChild>

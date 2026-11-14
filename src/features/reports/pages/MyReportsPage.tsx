@@ -11,7 +11,9 @@ export function MyReportsPage() {
   const { user } = useAuth()
   const [filterValue, setFilterValue] = useState('');
 
-  if (loading) {
+  // Só troca a tela pelo "Carregando" na primeira busca: nas atualizações a lista continua
+  // montada, senão o diálogo aberto (detalhes da denúncia) fecharia a cada ação
+  if (loading && !reports) {
     return (
       <div className="flex justify-center items-center min-h-96">
         <div className="text-lg">Carregando minhas denúncias...</div>
@@ -27,7 +29,8 @@ export function MyReportsPage() {
     );
   }
 
-  const filteredReports = reports?.filter((report) => report.description.includes(filterValue))
+  const search = filterValue.trim().toLowerCase()
+  const filteredReports = reports?.filter((report) => report.description.toLowerCase().includes(search))
 
   return (
     <div className="page-content">
@@ -35,7 +38,7 @@ export function MyReportsPage() {
       <h1>Minhas denúncias</h1>
 
       {/* Search + actions */}
-      <form className='flex items-center justify-start gap-2'>
+      <form className='flex items-center justify-start gap-2' onSubmit={e => e.preventDefault()}>
         <input
           type="text"
           className="input flex-1"

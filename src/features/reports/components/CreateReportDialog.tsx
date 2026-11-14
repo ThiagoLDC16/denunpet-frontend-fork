@@ -1,27 +1,30 @@
 import { useForm } from 'react-hook-form';
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/api';
+import { getApiErrorMessage } from '@/lib/apiError';
 
 import { Button } from "@/components/ui/button";
 import { DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAuth } from '@/features/auth/contexts/AuthContext';
-import type { User } from '@/features/auth/types';
 
-import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet'
 import type { LeafletEvent } from 'leaflet';
+import { ACCEPTED_MIDIA, isAcceptedMidia } from '../lib/midia';
 
 type reportSchemaProps = {
     description: string,
     details: string,
-    ocurrenceDate: Date
+    ocurrenceDate: Date | null
     location: string,
     anonymous: string,
     isHouse: boolean,
     houseNumber: string,
-    user?: User
 }
+
+// Centro do Brasil: usado quando não dá para obter a localização do usuário
+const DEFAULT_CENTER: [number, number] = [-14.235, -51.925];
+const DEFAULT_ZOOM = 4;
 
 function LocationPicker({ setCoords }: { setCoords: React.Dispatch<React.SetStateAction<null | number[]>> }) {
     useMapEvents({
@@ -37,18 +40,21 @@ export function CreateReportDialog({ setIsOpen, fetchReports }: { setIsOpen: Rea
     const { register, handleSubmit, watch } = useForm<reportSchemaProps>()
     const isHouse = watch("isHouse")
     const [loading, setLoading] = useState(false)
-    const [, setDisplay] = useState(false);
+    const [error, setError] = useState('')
     // Os avisos de itens obrigatórios só aparecem depois da primeira tentativa de envio
     const [submitted, setSubmitted] = useState(false);
     const [coords, setCoords] = useState<null | number[]>(null);
+    // 'pending' enquanto o navegador não responde; 'unavailable' se o usuário negar ou não houver suporte
+    const [geoStatus, setGeoStatus] = useState<'pending' | 'ok' | 'unavailable'>('pending');
     const [address, setAddress] = useState('');
     // Arquivos acumulados entre seleções (o input de arquivo substitui a seleção anterior a cada abertura)
     const [files, setFiles] = useState<File[]>([]);
+    const [ignoredFiles, setIgnoredFiles] = useState(0);
     const [previews, setPreviews] = useState<{ url: string, type: 'image' | 'video', file: File }[]>([]);
-    const { user } = useAuth()
 
     const hasImage = files.some(file => file.type === 'image/jpeg' || file.type === 'image/png');
     const hasVideo = files.some(file => file.type === 'video/mp4');
+    const today = new Date().toISOString().split('T')[0];
 
     useEffect(() => {
         const next = files
@@ -59,63 +65,88 @@ export function CreateReportDialog({ setIsOpen, fetchReports }: { setIsOpen: Rea
     }, [files])
 
     useEffect(() => {
-        function getLocation() {
-            navigator.geolocation.getCurrentPosition(position => {
-                setCoords([position.coords.latitude, position.coords.longitude]);
-            })
-
+        // Sem suporte (ou página aberta sem HTTPS fora do localhost): o local é escolhido no mapa
+        if (!navigator.geolocation) {
+            setGeoStatus('unavailable');
+            return;
         }
 
-        getLocation();
+        navigator.geolocation.getCurrentPosition(
+            position => {
+                // Não sobrescreve um local que o usuário já tenha marcado no mapa
+                setCoords(prev => prev ?? [position.coords.latitude, position.coords.longitude]);
+                setGeoStatus('ok');
+            },
+            () => setGeoStatus('unavailable'),
+            { timeout: 10000 }
+        )
     }, [])
 
     useEffect(() => {
-        let ignore = false;
+        if (!coords) return;
 
-        async function getAddress() {
-            if (coords) {
-                const address = await api.get(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${coords[0]}&lon=${coords[1]}&layer=address`);
-                if (!ignore) setAddress(address.data.display_name);
-                console.log(address.data)
+        const controller = new AbortController();
+
+        async function getAddress(lat: number, lon: number) {
+            try {
+                // fetch puro de propósito: o cliente `api` anexa o token JWT em toda requisição
+                // e ele não pode ser enviado para um serviço de terceiros
+                const params = new URLSearchParams({ format: 'jsonv2', lat: String(lat), lon: String(lon), layer: 'address' });
+                const response = await fetch(`https://nominatim.openstreetmap.org/reverse?${params}`, { signal: controller.signal });
+                if (!response.ok) throw new Error(`Nominatim respondeu ${response.status}`);
+
+                const data = await response.json();
+                setAddress(data.display_name ?? '');
+            } catch (err) {
+                if (controller.signal.aborted) return;
+                // O endereço é só um complemento: a denúncia segue com as coordenadas
+                console.error('Erro ao buscar o endereço:', err);
+                setAddress('');
             }
         }
 
-        getAddress();
+        getAddress(coords[0], coords[1]);
 
-        return () => { ignore = true; }
+        return () => controller.abort();
     }, [coords])
 
     async function handleCreateReport(data: reportSchemaProps) {
         setSubmitted(true)
+        setError('')
+
+        if (!hasImage || !hasVideo || !coords) return;
+        if (!data.ocurrenceDate || Number.isNaN(new Date(data.ocurrenceDate).getTime())) {
+            setError('Informe a data de ocorrência.');
+            return;
+        }
+
         const formData = new FormData()
         formData.append("description", data.description)
         formData.append("details", data.details)
         formData.append("ocurrenceDate", new Date(data.ocurrenceDate).toISOString())
-        formData.append("anonymous", data.anonymous)
-        console.log(data.anonymous);
-        if (coords) {
-            formData.append("location", coords.join(', '));
-            formData.append("address", address);
-            if (data.isHouse && data.houseNumber) formData.append("houseNumber", data.houseNumber);
-        }
+        // O autor não é enviado: o backend usa o usuário do token
+        formData.append("anonymous", String(data.anonymous))
+        formData.append("location", coords.join(', '));
+        formData.append("address", address);
+        if (data.isHouse && data.houseNumber) formData.append("houseNumber", data.houseNumber);
 
         files.forEach(file => formData.append("midia", file))
 
-        if (user) formData.append("user", JSON.stringify(user))
-
-        if (hasImage && hasVideo && coords) {
-            try {
-                setLoading(true)
-                await api.post("/api/report/register", formData)
-                setLoading(false)
-                setDisplay(true);
-                setIsOpen(false);
-                await fetchReports();
-            } catch (error) {
-                console.log(error)
-            }
+        try {
+            setLoading(true)
+            await api.post("/api/report/register", formData)
+            setIsOpen(false);
+            await fetchReports();
+        } catch (err) {
+            console.error(err)
+            setError(getApiErrorMessage(err, 'Não foi possível enviar a denúncia. Tente de novo.'))
+        } finally {
+            setLoading(false)
         }
     }
+
+    const mapCenter: [number, number] = coords ? [coords[0], coords[1]] : DEFAULT_CENTER;
+
     return (
         <DialogContent>
             <DialogHeader className="text-left">
@@ -125,38 +156,38 @@ export function CreateReportDialog({ setIsOpen, fetchReports }: { setIsOpen: Rea
 
             <form onSubmit={handleSubmit(handleCreateReport)} className="space y-6">
                 <div className="grid grid-cols-4">
-                    <Label htmlFor="descriptioon">Descrição</Label>
-                    <Input className="col-span-3" {...register('description')} id='description' placeholder='Descreve o acontecimento' />
+                    <Label htmlFor="description">Descrição</Label>
+                    <Input className="col-span-3" {...register('description')} id='description' required maxLength={500} placeholder='Descreve o acontecimento' />
                 </div>
 
                 <div className="pt-4 grid grid-cols-4">
                     <Label htmlFor="details">Detalhes</Label>
-                    <Input className="col-span-3" id="details" {...register('details')} placeholder='Foque nos detalhes específicos' />
+                    <Input className="col-span-3" id="details" {...register('details')} required maxLength={5000} placeholder='Foque nos detalhes específicos' />
                 </div>
 
                 <div className="pt-4 grid grid-cols-4">
                     <Label htmlFor="ocurrenceDate">Data de ocorrência</Label>
-                    <input className="col-span-3" type="date" id="ocurrenceDate" {...register("ocurrenceDate", { valueAsDate: true })} />
+                    <input className="col-span-3" type="date" id="ocurrenceDate" required max={today} {...register("ocurrenceDate", { valueAsDate: true })} />
                 </div>
 
                 <div className='pt-4 grid grid-cols-1'>
-                    {coords && (<MapContainer center={[coords[0], coords[1]]} zoom={13} scrollWheelZoom={true} style={{ height: 300 }}>
-                        <TileLayer
-                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                        />
-                        <Marker position={[coords[0], coords[1]]} draggable={true} eventHandlers={{
-                            dragend(e: LeafletEvent) {
-                                const { lat, lng } = e.target.getLatLng();
-                                setCoords([lat, lng]);
-                            }
-                        }}>
-                            <Popup>
-                                A pretty CSS3 popup. <br /> Easily customizable.
-                            </Popup>
-                        </Marker>
-                        <LocationPicker setCoords={setCoords} />
-                    </MapContainer>)}
+                    {geoStatus === 'pending' && !coords
+                        ? <p className='text-sm text-gray-500'>Obtendo sua localização...</p>
+                        // A key recria o mapa quando a localização chega: o centro do MapContainer só vale na montagem
+                        : <MapContainer key={geoStatus} center={mapCenter} zoom={coords ? 13 : DEFAULT_ZOOM} scrollWheelZoom={true} style={{ height: 300 }}>
+                            <TileLayer
+                                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                            />
+                            {coords && <Marker position={[coords[0], coords[1]]} draggable={true} eventHandlers={{
+                                dragend(e: LeafletEvent) {
+                                    const { lat, lng } = e.target.getLatLng();
+                                    setCoords([lat, lng]);
+                                }
+                            }} />}
+                            <LocationPicker setCoords={setCoords} />
+                        </MapContainer>}
+                    {geoStatus === 'unavailable' && !coords && <p className='text-xs text-gray-500 mt-1'>Não foi possível obter sua localização. Clique no mapa para marcar o local da denúncia.</p>}
                     {coords && <p className='text-xs text-gray-500 mt-1'>Clique no mapa ou arraste o marcador para alterar a localização</p>}
                     {address && <p>Endereço: {address}</p>}
                 </div>
@@ -169,18 +200,25 @@ export function CreateReportDialog({ setIsOpen, fetchReports }: { setIsOpen: Rea
 
                 {isHouse && <div className="pt-4 grid grid-cols-4">
                     <Label htmlFor="houseNumber">Número da casa</Label>
-                    <Input className="col-span-3" id="houseNumber" {...register('houseNumber')} placeholder='Ex.: 123' />
+                    <Input className="col-span-3" id="houseNumber" {...register('houseNumber')} maxLength={20} placeholder='Ex.: 123' />
                 </div>}
 
                 <div className="pt-4 grid grid-cols-4">
                     <Label htmlFor="midia">Fotos/vídeos</Label>
-                    <Input className="col-span-3" id="midia" multiple type="file" onChange={(e) => {
+                    <Input className="col-span-3" id="midia" multiple type="file" accept={ACCEPTED_MIDIA} onChange={(e) => {
                         const selected = Array.from(e.target.files ?? []);
-                        setFiles(prev => [...prev, ...selected]);
+                        // O backend recusa a requisição inteira se houver um arquivo de tipo não permitido
+                        const accepted = selected.filter(isAcceptedMidia);
+                        setIgnoredFiles(selected.length - accepted.length);
+                        setFiles(prev => [...prev, ...accepted]);
                         // Limpa o input para permitir abrir de novo (inclusive escolhendo o mesmo arquivo)
                         e.target.value = '';
                     }} />
                 </div>
+
+                {ignoredFiles > 0 && <p className='text-xs text-red-600 mt-1 text-right'>
+                    {ignoredFiles} {ignoredFiles > 1 ? 'arquivos ignorados' : 'arquivo ignorado'}: só são aceitas fotos (.jpg, .png, .webp, .gif) e vídeos (.mp4, .webm, .mov)
+                </p>}
 
                 {files.length > 0 && <p className='text-xs text-gray-500 mt-1 text-right'>
                     {files.length} {files.length > 1 ? 'arquivos selecionados' : 'arquivo selecionado'}
@@ -203,6 +241,7 @@ export function CreateReportDialog({ setIsOpen, fetchReports }: { setIsOpen: Rea
                 {submitted && !hasImage && <p className='text-right text-l mt-1 text-red-600'>Precisa de pelo menos uma foto (.jpg ou .png)</p>}
                 {submitted && !hasVideo && <p className='text-right text-l mt-1 text-red-600'>Precisa de pelo menos um vídeo (.mp4)</p>}
                 {submitted && (!hasImage || !hasVideo || !coords) && <p className='text-right text-sm mt-2 text-red-600 font-medium'>Não foi possível enviar: corrija os itens acima.</p>}
+                {error && <p className='text-right text-sm mt-2 text-red-600 font-medium'>{error}</p>}
                 {loading && <p className='text-right text-xl my-3 text-blue-500'>Carregando...</p>}
 
                 <label htmlFor="anonymous" className='flex items-center gap-2 justify-end'>
@@ -213,7 +252,7 @@ export function CreateReportDialog({ setIsOpen, fetchReports }: { setIsOpen: Rea
                     <DialogClose asChild>
                         <Button type="button" variant="destructive" className="px-6">Cancelar</Button>
                     </DialogClose>
-                    <Button type="submit" variant="default" className="px-8">Enviar</Button>
+                    <Button type="submit" variant="default" className="px-8" disabled={loading}>Enviar</Button>
                 </DialogFooter>
             </form>
         </DialogContent>

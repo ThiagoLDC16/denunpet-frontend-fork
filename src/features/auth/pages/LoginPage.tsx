@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { api } from '@/lib/api';
+import { getApiErrorMessage } from '@/lib/apiError';
 import { useAuth } from '../contexts/AuthContext';
 
 const loginSchema = z.object({
@@ -42,12 +43,8 @@ export function LoginPage() {
       const { token } = await response.data;
       await login(token);
       navigate('/');
-    } catch (err: any) {
-      if (err.response?.data?.code === 'EMAIL_ALREADY_REGISTERED') {
-        setError('Esse e-mail já foi utilizado em outro cadastro.');
-      } else {
-        setError(err.status === 401 ? 'Usuário ou senha incorretos.' : err?.message || 'Ocorreu um erro durante o login');
-      }
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Ocorreu um erro durante o login'));
     } finally {
       setIsLoading(false);
     }

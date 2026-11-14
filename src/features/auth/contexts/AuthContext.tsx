@@ -13,7 +13,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState<User | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -34,7 +34,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data: user } = await api.get('/api/auth/logged-user');
       setUser(user);
       setIsAuthenticated(true);
-    } catch (error) {
+    } catch {
       localStorage.removeItem('token');
       setUser(null);
       setIsAuthenticated(false);
