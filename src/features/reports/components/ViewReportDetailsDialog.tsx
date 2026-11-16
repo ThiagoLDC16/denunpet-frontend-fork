@@ -13,6 +13,7 @@ import { getApiErrorMessage } from '@/lib/apiError';
 import { ACCEPTED_IMAGES, MAX_TRIAGE_IMAGE_SIZE_MB, getMidiaUrl, validateMidiaFiles, type RejectedFile } from '../lib/midia';
 import { RejectedFilesNotice } from './RejectedFilesNotice';
 import { UploadProgress } from './UploadProgress';
+import { useFeedback } from '@/features/feedback/feedbackContext';
 import { parseLocation } from '../lib/location';
 
 export function ViewReportDetailsDialog({ report, fetchReports }: { report: Report, fetchReports?: () => Promise<void> }) {
@@ -29,6 +30,7 @@ export function ViewReportDetailsDialog({ report, fetchReports }: { report: Repo
   // Muda a cada envio concluído para limpar o campo de arquivo
   const [fileInputKey, setFileInputKey] = useState(0);
   const { user } = useAuth();
+  const { showSuccess } = useFeedback();
   if (!report) return null;
 
   // Só a ONG responsável mexe na denúncia, e só enquanto ela está em triagem/andamento
@@ -54,6 +56,7 @@ export function ViewReportDetailsDialog({ report, fetchReports }: { report: Repo
       await api.post(`/api/report/${report.id}/midia`, formData, {
         onUploadProgress: (event) => setUploadProgress(event.total ? Math.round((event.loaded * 100) / event.total) : null),
       })
+      showSuccess(triageImages.length > 1 ? `${triageImages.length} imagens adicionadas à denúncia.` : 'Imagem adicionada à denúncia.');
       setTriageImages([]);
       setRejectedTriageImages([]);
       setFileInputKey(key => key + 1);
@@ -82,7 +85,13 @@ export function ViewReportDetailsDialog({ report, fetchReports }: { report: Repo
         resolved: 'RESOLVED',
         unresolved: 'UNRESOLVED',
       }
+      const successMessages = {
+        progress: 'Andamento da denúncia atualizado.',
+        resolved: 'Denúncia concluída como resolvida.',
+        unresolved: 'Denúncia concluída sem resolução.',
+      }
       await api.put(`/api/report/${report.id}/status`, { statusComment, status: statusTypes[type] })
+      showSuccess(successMessages[type]);
       setStatusCommentError(false);
       setStatusComment('');
       if (fetchReports) {

@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog"
 import { api } from "@/lib/api"
 import { getApiErrorMessage } from "@/lib/apiError"
+import { useFeedback } from "@/features/feedback/feedbackContext"
 import { ClipboardPlus } from "lucide-react"
 import { useState } from "react"
 
@@ -20,12 +21,14 @@ export function SendReportToReviewDialogButton({ id, fetchReports }: { id: numbe
     const [reason, setReason] = useState('');
     const [reasonError, setReasonError] = useState(false);
     const [error, setError] = useState('');
+    const { showSuccess } = useFeedback();
 
     const handleSubmit = async () => {
         setError('');
         try {
             await api.put(`/api/report/${id}/send-to-review`)
             setOpen(false)
+            showSuccess(`Denúncia ${id} assumida. Ela está em "Minhas denúncias".`)
             if (fetchReports)
                 await fetchReports()
         } catch (error) {
@@ -43,6 +46,7 @@ export function SendReportToReviewDialogButton({ id, fetchReports }: { id: numbe
         try {
             await api.put(`/api/report/${id}/reject`, { reason })
             setOpen(false);
+            showSuccess(`Denúncia ${id} rejeitada.`)
             setReasonError(false);
             if (fetchReports)
                 await fetchReports()
