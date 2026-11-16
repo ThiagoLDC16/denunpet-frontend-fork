@@ -12,6 +12,7 @@ import { UserType } from '@/features/auth/types';
 import { getApiErrorMessage } from '@/lib/apiError';
 import { ACCEPTED_IMAGES, MAX_TRIAGE_IMAGE_SIZE_MB, getMidiaUrl, validateMidiaFiles, type RejectedFile } from '../lib/midia';
 import { RejectedFilesNotice } from './RejectedFilesNotice';
+import { UploadProgress } from './UploadProgress';
 import { parseLocation } from '../lib/location';
 
 export function ViewReportDetailsDialog({ report, fetchReports }: { report: Report, fetchReports?: () => Promise<void> }) {
@@ -23,6 +24,8 @@ export function ViewReportDetailsDialog({ report, fetchReports }: { report: Repo
   const [rejectedTriageImages, setRejectedTriageImages] = useState<RejectedFile[]>([]);
   const [triageImagesError, setTriageImagesError] = useState(false);
   const [uploadingTriageImages, setUploadingTriageImages] = useState(false);
+  // Percentual do envio das imagens; null quando o navegador não informa o total
+  const [uploadProgress, setUploadProgress] = useState<number | null>(0);
   // Muda a cada envio concluído para limpar o campo de arquivo
   const [fileInputKey, setFileInputKey] = useState(0);
   const { user } = useAuth();
@@ -43,11 +46,14 @@ export function ViewReportDetailsDialog({ report, fetchReports }: { report: Repo
       return;
     }
     setUploadingTriageImages(true);
+    setUploadProgress(0);
     setActionError('');
     try {
       const formData = new FormData();
       triageImages.forEach(file => formData.append('midia', file));
-      await api.post(`/api/report/${report.id}/midia`, formData)
+      await api.post(`/api/report/${report.id}/midia`, formData, {
+        onUploadProgress: (event) => setUploadProgress(event.total ? Math.round((event.loaded * 100) / event.total) : null),
+      })
       setTriageImages([]);
       setRejectedTriageImages([]);
       setFileInputKey(key => key + 1);
@@ -234,6 +240,7 @@ export function ViewReportDetailsDialog({ report, fetchReports }: { report: Repo
               {triageImages.length} {triageImages.length > 1 ? 'imagens prontas para enviar' : 'imagem pronta para enviar'}
             </p>}
             <RejectedFilesNotice files={rejectedTriageImages} />
+            {uploadingTriageImages && <UploadProgress progress={uploadProgress} savingLabel="Imagens enviadas. Salvando..." />}
             {triageImagesError && <p className="text-red-600 text-xs text-right">Selecione ao menos uma imagem</p>}
           </div>}
         </div>}

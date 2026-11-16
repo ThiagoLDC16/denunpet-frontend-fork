@@ -12,6 +12,7 @@ import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet'
 import type { LeafletEvent } from 'leaflet';
 import { ACCEPTED_MIDIA, MAX_FILES_PER_UPLOAD, MAX_FILE_SIZE_MB, validateMidiaFiles, type RejectedFile } from '../lib/midia';
 import { RejectedFilesNotice } from './RejectedFilesNotice';
+import { UploadProgress } from './UploadProgress';
 
 type reportSchemaProps = {
     description: string,
@@ -51,6 +52,8 @@ export function CreateReportDialog({ setIsOpen, fetchReports }: { setIsOpen: Rea
     // Arquivos acumulados entre seleções (o input de arquivo substitui a seleção anterior a cada abertura)
     const [files, setFiles] = useState<File[]>([]);
     const [rejectedFiles, setRejectedFiles] = useState<RejectedFile[]>([]);
+    // Percentual do envio dos arquivos; null quando o navegador não informa o total
+    const [uploadProgress, setUploadProgress] = useState<number | null>(0);
     const [previews, setPreviews] = useState<{ url: string, type: 'image' | 'video', file: File }[]>([]);
 
     const hasImage = files.some(file => file.type === 'image/jpeg' || file.type === 'image/png');
@@ -135,7 +138,10 @@ export function CreateReportDialog({ setIsOpen, fetchReports }: { setIsOpen: Rea
 
         try {
             setLoading(true)
-            await api.post("/api/report/register", formData)
+            setUploadProgress(0)
+            await api.post("/api/report/register", formData, {
+                onUploadProgress: (event) => setUploadProgress(event.total ? Math.round((event.loaded * 100) / event.total) : null),
+            })
             setIsOpen(false);
             await fetchReports();
         } catch (err) {
@@ -245,7 +251,7 @@ export function CreateReportDialog({ setIsOpen, fetchReports }: { setIsOpen: Rea
                 {submitted && !hasVideo && <p className='text-right text-l mt-1 text-red-600'>Precisa de pelo menos um vídeo (.mp4)</p>}
                 {submitted && (!hasImage || !hasVideo || !coords) && <p className='text-right text-sm mt-2 text-red-600 font-medium'>Não foi possível enviar: corrija os itens acima.</p>}
                 {error && <p className='text-right text-sm mt-2 text-red-600 font-medium'>{error}</p>}
-                {loading && <p className='text-right text-xl my-3 text-blue-500'>Carregando...</p>}
+                {loading && <UploadProgress progress={uploadProgress} />}
 
                 <label htmlFor="anonymous" className='flex items-center gap-2 justify-end'>
                     <input type='checkbox' id="anonymous" value={'true'} {...register("anonymous")} /> Denúncia anônima?

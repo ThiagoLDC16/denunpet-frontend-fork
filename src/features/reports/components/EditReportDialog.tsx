@@ -11,6 +11,7 @@ import type { Report } from '../types/report.types';
 import { MapContainer, Marker, TileLayer } from 'react-leaflet';
 import { ACCEPTED_MIDIA, MAX_FILES_PER_UPLOAD, MAX_FILE_SIZE_MB, getMidiaUrl, isImageFile, isVideoFile, validateMidiaFiles, type RejectedFile } from '../lib/midia';
 import { RejectedFilesNotice } from './RejectedFilesNotice';
+import { UploadProgress } from './UploadProgress';
 import { parseLocation } from '../lib/location';
 
 
@@ -46,6 +47,8 @@ export function EditReportDialog({ report, setIsOpen, fetchReports }: { report: 
     const [removedMidiaIds, setRemovedMidiaIds] = useState<number[]>([]);
     const [files, setFiles] = useState<File[]>([]);
     const [rejectedFiles, setRejectedFiles] = useState<RejectedFile[]>([]);
+    // Percentual do envio dos arquivos; null quando o navegador não informa o total
+    const [uploadProgress, setUploadProgress] = useState<number | null>(0);
     const [previews, setPreviews] = useState<{ url: string, type: 'image' | 'video', file: File }[]>([]);
 
     const currentMidia = report.midia?.filter(item => !item.addedByNgo && !removedMidiaIds.includes(item.id)) ?? [];
@@ -90,7 +93,10 @@ export function EditReportDialog({ report, setIsOpen, fetchReports }: { report: 
 
         try {
             setLoading(true);
-            await api.put(`/api/report/${report.id}`, formData)
+            setUploadProgress(0)
+            await api.put(`/api/report/${report.id}`, formData, {
+                onUploadProgress: (event) => setUploadProgress(event.total ? Math.round((event.loaded * 100) / event.total) : null),
+            })
             setIsOpen(false);
             if (fetchReports) {
                 await fetchReports();
@@ -226,7 +232,7 @@ export function EditReportDialog({ report, setIsOpen, fetchReports }: { report: 
                 </div>
 
                 {error && <p className='text-right text-sm mt-2 text-red-600 font-medium'>{error}</p>}
-                {loading && <p className='text-right text-xl my-3 text-blue-500'>Carregando...</p>}
+                {loading && <UploadProgress progress={uploadProgress} />}
 
                 <DialogFooter className="flex-row justify-end mt-4">
                     <DialogClose asChild>
