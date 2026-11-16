@@ -13,6 +13,7 @@ import type { LeafletEvent } from 'leaflet';
 import { ACCEPTED_MIDIA, MAX_FILES_PER_UPLOAD, MAX_FILE_SIZE_MB, validateMidiaFiles, type RejectedFile } from '../lib/midia';
 import { RejectedFilesNotice } from './RejectedFilesNotice';
 import { UploadProgress } from './UploadProgress';
+import { useFeedback } from '@/features/feedback/feedbackContext';
 
 type reportSchemaProps = {
     description: string,
@@ -54,6 +55,7 @@ export function CreateReportDialog({ setIsOpen, fetchReports }: { setIsOpen: Rea
     const [rejectedFiles, setRejectedFiles] = useState<RejectedFile[]>([]);
     // Percentual do envio dos arquivos; null quando o navegador não informa o total
     const [uploadProgress, setUploadProgress] = useState<number | null>(0);
+    const { showSuccess } = useFeedback();
     const [previews, setPreviews] = useState<{ url: string, type: 'image' | 'video', file: File }[]>([]);
 
     const hasImage = files.some(file => file.type === 'image/jpeg' || file.type === 'image/png');
@@ -143,6 +145,7 @@ export function CreateReportDialog({ setIsOpen, fetchReports }: { setIsOpen: Rea
                 onUploadProgress: (event) => setUploadProgress(event.total ? Math.round((event.loaded * 100) / event.total) : null),
             })
             setIsOpen(false);
+            showSuccess('Denúncia registrada com sucesso.');
             await fetchReports();
         } catch (err) {
             console.error(err)

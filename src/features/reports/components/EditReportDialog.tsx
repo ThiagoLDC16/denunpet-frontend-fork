@@ -12,6 +12,7 @@ import { MapContainer, Marker, TileLayer } from 'react-leaflet';
 import { ACCEPTED_MIDIA, MAX_FILES_PER_UPLOAD, MAX_FILE_SIZE_MB, getMidiaUrl, isImageFile, isVideoFile, validateMidiaFiles, type RejectedFile } from '../lib/midia';
 import { RejectedFilesNotice } from './RejectedFilesNotice';
 import { UploadProgress } from './UploadProgress';
+import { useFeedback } from '@/features/feedback/feedbackContext';
 import { parseLocation } from '../lib/location';
 
 
@@ -49,6 +50,7 @@ export function EditReportDialog({ report, setIsOpen, fetchReports }: { report: 
     const [rejectedFiles, setRejectedFiles] = useState<RejectedFile[]>([]);
     // Percentual do envio dos arquivos; null quando o navegador não informa o total
     const [uploadProgress, setUploadProgress] = useState<number | null>(0);
+    const { showSuccess } = useFeedback();
     const [previews, setPreviews] = useState<{ url: string, type: 'image' | 'video', file: File }[]>([]);
 
     const currentMidia = report.midia?.filter(item => !item.addedByNgo && !removedMidiaIds.includes(item.id)) ?? [];
@@ -98,6 +100,7 @@ export function EditReportDialog({ report, setIsOpen, fetchReports }: { report: 
                 onUploadProgress: (event) => setUploadProgress(event.total ? Math.round((event.loaded * 100) / event.total) : null),
             })
             setIsOpen(false);
+            showSuccess(`Denúncia ${report.id} atualizada com sucesso.`);
             if (fetchReports) {
                 await fetchReports();
             }
