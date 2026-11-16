@@ -10,7 +10,8 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/features/auth/contexts/AuthContext';
 import { UserType } from '@/features/auth/types';
 import { getApiErrorMessage } from '@/lib/apiError';
-import { ACCEPTED_IMAGES, getMidiaUrl } from '../lib/midia';
+import { ACCEPTED_IMAGES, MAX_TRIAGE_IMAGE_SIZE_MB, getMidiaUrl, validateMidiaFiles, type RejectedFile } from '../lib/midia';
+import { RejectedFilesNotice } from './RejectedFilesNotice';
 import { parseLocation } from '../lib/location';
 
 export function ViewReportDetailsDialog({ report, fetchReports }: { report: Report, fetchReports?: () => Promise<void> }) {
@@ -18,9 +19,12 @@ export function ViewReportDetailsDialog({ report, fetchReports }: { report: Repo
   const [statusCommentError, setStatusCommentError] = useState(false);
   const [actionError, setActionError] = useState('');
   const [updatingStatus, setUpdatingStatus] = useState(false);
-  const [triageImages, setTriageImages] = useState<FileList | null>(null);
+  const [triageImages, setTriageImages] = useState<File[]>([]);
+  const [rejectedTriageImages, setRejectedTriageImages] = useState<RejectedFile[]>([]);
   const [triageImagesError, setTriageImagesError] = useState(false);
   const [uploadingTriageImages, setUploadingTriageImages] = useState(false);
+  // Muda a cada envio concluído para limpar o campo de arquivo
+  const [fileInputKey, setFileInputKey] = useState(0);
   const { user } = useAuth();
   if (!report) return null;
 
@@ -34,7 +38,7 @@ export function ViewReportDetailsDialog({ report, fetchReports }: { report: Repo
   const ngoMidia = report.midia?.filter(item => item.addedByNgo) ?? [];
 
   const handleAddTriageImages = async () => {
-    if (!triageImages || triageImages.length === 0) {
+    if (triageImages.length === 0) {
       setTriageImagesError(true);
       return;
     }
@@ -42,9 +46,11 @@ export function ViewReportDetailsDialog({ report, fetchReports }: { report: Repo
     setActionError('');
     try {
       const formData = new FormData();
-      Array.from(triageImages).forEach(file => formData.append('midia', file));
+      triageImages.forEach(file => formData.append('midia', file));
       await api.post(`/api/report/${report.id}/midia`, formData)
-      setTriageImages(null);
+      setTriageImages([]);
+      setRejectedTriageImages([]);
+      setFileInputKey(key => key + 1);
       setTriageImagesError(false);
       if (fetchReports) {
         await fetchReports()
@@ -203,18 +209,31 @@ export function ViewReportDetailsDialog({ report, fetchReports }: { report: Repo
           {canAddTriageImages && <div className="space-y-1">
             <div className="flex gap-2 items-center">
               <input
-                key={triageImages ? 'selected' : 'empty'}
+                key={fileInputKey}
                 type="file"
                 accept={ACCEPTED_IMAGES}
                 multiple
                 name="triageImages"
+                aria-describedby="triage-images-hint"
                 className="border-2 grow rounded-sm py-1 text-sm"
-                onChange={(e) => setTriageImages(e.target.files)}
+                disabled={uploadingTriageImages}
+                onChange={(e) => {
+                  // Formato, tamanho e quantidade são conferidos antes do envio, com o motivo de cada recusa
+                  const { accepted, rejected } = validateMidiaFiles(Array.from(e.target.files ?? []), { onlyImages: true, maxSizeMb: MAX_TRIAGE_IMAGE_SIZE_MB });
+                  setTriageImages(accepted);
+                  setRejectedTriageImages(rejected);
+                  if (accepted.length > 0) setTriageImagesError(false);
+                }}
               />
               <Button variant={'secondary'} onClick={handleAddTriageImages} disabled={uploadingTriageImages}>
                 {uploadingTriageImages ? 'Enviando...' : 'Adicionar imagens'}
               </Button>
             </div>
+            <p id="triage-images-hint" className="text-xs text-gray-500">Imagens .jpg, .png, .webp ou .gif, até {MAX_TRIAGE_IMAGE_SIZE_MB} MB cada</p>
+            {triageImages.length > 0 && !uploadingTriageImages && <p className="text-xs text-gray-500">
+              {triageImages.length} {triageImages.length > 1 ? 'imagens prontas para enviar' : 'imagem pronta para enviar'}
+            </p>}
+            <RejectedFilesNotice files={rejectedTriageImages} />
             {triageImagesError && <p className="text-red-600 text-xs text-right">Selecione ao menos uma imagem</p>}
           </div>}
         </div>}

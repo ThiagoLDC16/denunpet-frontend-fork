@@ -9,7 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { Report } from '../types/report.types';
 import { MapContainer, Marker, TileLayer } from 'react-leaflet';
-import { ACCEPTED_MIDIA, getMidiaUrl, isAcceptedMidia, isImageFile, isVideoFile } from '../lib/midia';
+import { ACCEPTED_MIDIA, MAX_FILES_PER_UPLOAD, MAX_FILE_SIZE_MB, getMidiaUrl, isImageFile, isVideoFile, validateMidiaFiles, type RejectedFile } from '../lib/midia';
+import { RejectedFilesNotice } from './RejectedFilesNotice';
 import { parseLocation } from '../lib/location';
 
 
@@ -44,7 +45,7 @@ export function EditReportDialog({ report, setIsOpen, fetchReports }: { report: 
     // Mídias existentes marcadas para remoção e arquivos novos acumulados entre seleções
     const [removedMidiaIds, setRemovedMidiaIds] = useState<number[]>([]);
     const [files, setFiles] = useState<File[]>([]);
-    const [ignoredFiles, setIgnoredFiles] = useState(0);
+    const [rejectedFiles, setRejectedFiles] = useState<RejectedFile[]>([]);
     const [previews, setPreviews] = useState<{ url: string, type: 'image' | 'video', file: File }[]>([]);
 
     const currentMidia = report.midia?.filter(item => !item.addedByNgo && !removedMidiaIds.includes(item.id)) ?? [];
@@ -169,20 +170,22 @@ export function EditReportDialog({ report, setIsOpen, fetchReports }: { report: 
 
                 <div className="pt-4 grid grid-cols-4">
                     <Label htmlFor="midia">Fotos/vídeos</Label>
-                    <Input className="col-span-3" id="midia" multiple type="file" accept={ACCEPTED_MIDIA} onChange={(e) => {
+                    <Input className="col-span-3" id="midia" multiple type="file" accept={ACCEPTED_MIDIA} aria-describedby="midia-hint" disabled={loading} onChange={(e) => {
                         const selected = Array.from(e.target.files ?? []);
-                        // O backend recusa a requisição inteira se houver um arquivo de tipo não permitido
-                        const accepted = selected.filter(isAcceptedMidia);
-                        setIgnoredFiles(selected.length - accepted.length);
+                        // Formato, tamanho e quantidade são conferidos antes do envio, com o motivo de cada recusa
+                        const { accepted, rejected } = validateMidiaFiles(selected, { maxSizeMb: MAX_FILE_SIZE_MB, alreadySelected: files.length });
+                        setRejectedFiles(rejected);
                         setFiles(prev => [...prev, ...accepted]);
                         // Limpa o input para permitir abrir de novo (inclusive escolhendo o mesmo arquivo)
                         e.target.value = '';
                     }} />
                 </div>
 
-                {ignoredFiles > 0 && <p className='text-xs text-red-600 mt-1 text-right'>
-                    {ignoredFiles} {ignoredFiles > 1 ? 'arquivos ignorados' : 'arquivo ignorado'}: só são aceitas fotos (.jpg, .png, .webp, .gif) e vídeos (.mp4, .webm, .mov)
-                </p>}
+                <p id="midia-hint" className='text-xs text-gray-500 mt-1 text-right'>
+                    Fotos (.jpg, .png, .webp, .gif) e vídeos (.mp4, .webm, .mov), até {MAX_FILE_SIZE_MB} MB cada, no máximo {MAX_FILES_PER_UPLOAD} arquivos por envio
+                </p>
+
+                <RejectedFilesNotice files={rejectedFiles} />
 
                 {previews.length > 0 && <div className='pt-4'>
                     <h3 className='text-sm'>Novas mídias</h3>
