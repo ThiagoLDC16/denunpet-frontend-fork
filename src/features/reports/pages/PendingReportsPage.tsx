@@ -24,6 +24,8 @@ export function PendingReportsPage() {
 
   const search = filterValue.trim().toLowerCase()
   const reports = allReports?.filter((report) => report.description.toLowerCase().includes(search))
+  const total = allReports?.length ?? 0
+  const found = reports?.length ?? 0
 
   return (
     <div className="page-content">
@@ -41,7 +43,11 @@ export function PendingReportsPage() {
         />
       </form>
 
-
+      {/* Indica que a busca está aplicada e quantos resultados ela trouxe */}
+      {search && total > 0 && <p className="text-sm text-gray-600 mt-2" role="status" aria-live="polite">
+        {found === 0 ? 'Nenhum resultado' : `Mostrando ${found} de ${total} ${total > 1 ? 'denúncias' : 'denúncia'}`} para “{filterValue.trim()}”.{' '}
+        <button type="button" className="underline" onClick={() => setFilterValue('')}>Limpar busca</button>
+      </p>}
 
       <div className="sectionLabel">Denúncias registradas</div>
 
@@ -49,7 +55,9 @@ export function PendingReportsPage() {
       <section className={`list mt-3  block  ${reports && reports.length > 0 ? "md:grid md:grid-cols-2" : ""}`} aria-label="Denúncias Pendentes">
         {reports && reports.length > 0 ? reports.map(item => <ReportCard key={item.id} report={item} fetchReports={refetch} />)
           : <div className="text-center py-12">
-            <p className="text-gray-500 text-lg">Nenhuma denúncia está pendente de triagem.</p>
+            <p className="text-gray-500 text-lg">
+              {search && total > 0 ? `Nenhuma denúncia encontrada para “${filterValue.trim()}”.` : 'Nenhuma denúncia está pendente de triagem.'}
+            </p>
           </div>
         }
       </section>
