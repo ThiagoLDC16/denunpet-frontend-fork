@@ -1,5 +1,6 @@
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '@/features/auth/contexts/AuthContext';
+import type { UserType } from '@/features/auth/types';
 
 export function ProtectedRoute({ userType }: { userType?: UserType }) {
   const { user, isAuthenticated, isLoading } = useAuth();

@@ -5,7 +5,9 @@ export interface User {
     type: UserType
 }
 
-export enum UserType {
-    USER = 'USER',
-    ONG = 'ONG',
-}
+export const UserType = {
+    USER: 'USER',
+    ONG: 'ONG',
+} as const;
+
+export type UserType = typeof UserType[keyof typeof UserType];

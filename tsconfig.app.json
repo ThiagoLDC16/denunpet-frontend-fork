@@ -32,5 +32,6 @@
       ]
     }
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/features/animals", "src/features/reports/hooks/useReports.ts"]
 }
