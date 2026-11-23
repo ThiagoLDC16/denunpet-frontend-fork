@@ -49,7 +49,7 @@ const router = createBrowserRouter([
   },
   {
     path: '*',
-    element: <Navigate to="/animals" replace />
+    element: <Navigate to="/" replace />
   }
 ]);
 

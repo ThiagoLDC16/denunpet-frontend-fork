@@ -34,7 +34,7 @@ export const ReportStatus = {
     IN_PROGRESS: "IN_PROGRESS",
     RESOLVED: "RESOLVED",
     UNRESOLVED: "UNRESOLVED"
-};
+} as const;
 
 export type ReportStatus = typeof ReportStatus[keyof typeof ReportStatus];
 
