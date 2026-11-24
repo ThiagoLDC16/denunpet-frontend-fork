@@ -11,6 +11,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { api } from '@/lib/api';
+import { getApiErrorMessage } from '@/lib/apiError';
+import { isValidCnpj, isValidCpf } from '@/lib/document';
 import { UserType } from '../types';
 
 const registerSchema = z
@@ -53,7 +55,16 @@ const registerSchema = z
             message: 'CNPJ é obrigatório para organizações',
             path: ['cnpj'],
         }
-    );
+    )
+    // Dígitos verificadores (o backend faz a mesma conferência)
+    .refine((data) => data.type !== UserType.USER || !data.cpf || isValidCpf(data.cpf), {
+        message: 'CPF inválido',
+        path: ['cpf'],
+    })
+    .refine((data) => data.type !== UserType.ONG || !data.cnpj || isValidCnpj(data.cnpj), {
+        message: 'CNPJ inválido',
+        path: ['cnpj'],
+    });
 
 type RegisterFormData = z.infer<typeof registerSchema>;
 
@@ -81,6 +92,7 @@ export function RegisterPage() {
         setError('');
 
         try {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { confirmPassword, ...userData } = data;
 
             const response = await api.post('/api/auth/register', userData);
@@ -88,8 +100,8 @@ export function RegisterPage() {
             const { token } = await response.data;
             localStorage.setItem('token', token);
             window.location.href = '/'
-        } catch (err: any) {
-            setError(err instanceof Error ? err.message : 'Ocorreu um erro durante o cadastro');
+        } catch (err) {
+            setError(getApiErrorMessage(err, 'Ocorreu um erro durante o cadastro'));
         } finally {
             setIsLoading(false);
         }

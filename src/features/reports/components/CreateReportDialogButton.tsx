@@ -13,7 +13,9 @@ export function CreateReportDialogButton({fetchReports}: {fetchReports: () => Pr
                 </Button>
             </DialogTrigger>
 
-            <CreateReportDialog setIsOpen={setIsOpen} fetchReports={fetchReports}/>
+            {/* Só monta com o diálogo aberto: evita pedir a geolocalização (e consultar o endereço)
+                ao carregar a página, e o formulário começa limpo a cada abertura */}
+            {isOpen && <CreateReportDialog setIsOpen={setIsOpen} fetchReports={fetchReports}/>}
         </Dialog>
     )
 }
