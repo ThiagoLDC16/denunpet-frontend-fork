@@ -10,6 +10,8 @@ import {
     DialogTrigger,
 } from "@/components/ui/dialog"
 import { api } from "@/lib/api"
+import { getApiErrorMessage } from "@/lib/apiError"
+import { useFeedback } from "@/features/feedback/feedbackContext"
 import { ClipboardPlus } from "lucide-react"
 import { useState } from "react"
 
@@ -18,31 +20,39 @@ export function SendReportToReviewDialogButton({ id, fetchReports }: { id: numbe
     const [isReasonFieldOpen, setIsReasonFieldOpen] = useState(false);
     const [reason, setReason] = useState('');
     const [reasonError, setReasonError] = useState(false);
+    const [error, setError] = useState('');
+    const { showSuccess } = useFeedback();
 
     const handleSubmit = async () => {
+        setError('');
         try {
             await api.put(`/api/report/${id}/send-to-review`)
             setOpen(false)
+            showSuccess(`Denúncia ${id} assumida. Ela está em "Minhas denúncias".`)
             if (fetchReports)
                 await fetchReports()
         } catch (error) {
             console.error(error)
+            setError(getApiErrorMessage(error, 'Não foi possível assumir a denúncia.'))
         }
     }
 
     const handleReject = async () => {
-        if (!reason) {
+        if (!reason.trim()) {
             setReasonError(true);
             return;
         }
+        setError('');
         try {
             await api.put(`/api/report/${id}/reject`, { reason })
             setOpen(false);
+            showSuccess(`Denúncia ${id} rejeitada.`)
             setReasonError(false);
             if (fetchReports)
                 await fetchReports()
         } catch (error) {
             console.error(error)
+            setError(getApiErrorMessage(error, 'Não foi possível rejeitar a denúncia.'))
         }
     }
 
@@ -64,6 +74,7 @@ export function SendReportToReviewDialogButton({ id, fetchReports }: { id: numbe
                     Razão: <input type="text" name="reason" value={reason} className="border-2 w-full rounded-sm" onChange={(e) => setReason(e.target.value)}/>
                 </label>}
                 {reasonError && <p className="text-red-600 text-sm text-right">Uma razão é obrigatória para rejeitar a denúncia</p>}
+                {error && <p className="text-red-600 text-sm text-right">{error}</p>}
             </DialogHeader>
 
             <DialogFooter className="flex flex-row items-center justify-center">

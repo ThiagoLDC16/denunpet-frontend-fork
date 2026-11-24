@@ -13,7 +13,7 @@ export function EditReportDialogButton({ report, fetchReports }: { report: Repor
                 <Button variant="outline"><Pencil size={14} /></Button>
             </DialogTrigger>
 
-            <EditReportDialog report={report} setIsOpen={setIsOpen} fetchReports={fetchReports}/>
+            {isOpen && <EditReportDialog report={report} setIsOpen={setIsOpen} fetchReports={fetchReports}/>}
         </Dialog>
     )
 }
